@@ -26,7 +26,8 @@ export default function Dashboard() {
   const { 
     stageRef,
     tool, isDragging, lines,
-    normalizedRect, isDrawing, selectedIds,
+    selectionRect, isDrawing, selectedBounds,
+    normalizedRect,
     changeTool, handleMouseDown, 
     handleWheel
   } = useEditor();
@@ -107,6 +108,19 @@ export default function Dashboard() {
         }}
       >
         <Layer>
+          {selectedBounds && (
+            <Rect
+              x={selectedBounds.x}
+              y={selectedBounds.y}
+              width={selectedBounds.width}
+              height={selectedBounds.height}
+              stroke="blue"
+              dash={[6, 4]}
+              strokeWidth={1}
+              listening={false}
+            />
+          )}
+
           {lines.map(line => (
             <Line
               key={line.id}
@@ -114,7 +128,7 @@ export default function Dashboard() {
               strokeWidth={5}
               tension={0.5}
 
-              stroke={selectedIds.includes(line.id) ? "orange" : "lightblue"}
+              stroke="red"
 
               draggable
               lineCap="round"

@@ -1,10 +1,18 @@
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import type Konva from "konva";
 
 
 type Tool = "hand" | "brush" | "eraser" | "select";
 type ActionType = "paint"
+
+
+interface Geometry {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 interface LineData {
   id: number
@@ -22,10 +30,12 @@ interface Action {
 }
 
 
-function normalizeRect(r: any) {
+function normalizeRect(r: Geometry) {
+  const x = Math.min(r.x, r.x + r.width);
+  const y = Math.min(r.y, r.y + r.height);
   return {
-    x: Math.min(r.x, r.x + r.width),
-    y: Math.min(r.y, r.y + r.height),
+    x,
+    y,
     width: Math.abs(r.width),
     height: Math.abs(r.height),
   };
@@ -83,10 +93,43 @@ function isShapeInsideRect(shape: any, rect: any) {
   if (shapeArea === 0) return false;
 
   const ratio = intersectionArea / shapeArea;
-  
-  console.log(ratio)
 
   return ratio > 0.2;
+}
+
+function isPointInsideRect(point: any, rect: any) {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  );
+}
+
+function getSelectedBounds(lines: LineData[], selectedIds: number[]) {
+  const selected = lines.filter(l => selectedIds.includes(l.id));
+  if (selected.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const line of selected) {
+    const b = getLineBounds(line.points);
+
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.width);
+    maxY = Math.max(maxY, b.y + b.height);
+  }
+
+  return {
+    x: minX - 20,
+    y: minY - 20,
+    width: maxX - minX + 40,
+    height: maxY - minY + 40,
+  };
 }
 
 export const useEditor = () => {
@@ -98,14 +141,18 @@ export const useEditor = () => {
   const history = useRef<Action[]>([]);
   const historyPlace = useRef<number>(0);
 
+  const moveStart = useRef<any>(null);
   const isDrawing = useRef<boolean>(false);
 
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-
-  const [selectionRect, setSelectionRect] = useState<any>(null);
+  const [selectionRect, setSelectionRect] = useState<Geometry | null>(null);
   const normalizedRect = selectionRect ? normalizeRect(selectionRect) : null;
+
+  const selectedBounds = useMemo(() => {
+    return getSelectedBounds(lines, selectedIds);
+  }, [lines, selectedIds]);
 
   const changeTool = (tool_name: Tool) => {
     setTool(() => {
@@ -185,14 +232,18 @@ export const useEditor = () => {
 
       if (point){
         const relativePoint = transform.point(point);
-        
+
+        if (selectedBounds && isPointInsideRect(relativePoint, selectedBounds)){
+          moveStart.current = relativePoint;
+          return
+        }
+
         setSelectionRect({
           x: relativePoint.x,
           y: relativePoint.y,
           width: 0,
-          height: 0,
-        });
-
+          height: 0
+        })
         setSelectedIds([]);
       }
     }
@@ -234,13 +285,16 @@ export const useEditor = () => {
       })
     }
     else if (tool == "select"){
-      if (!selectionRect) return;
+      if (moveStart.current){
+        moveStart.current = null;
+      } else if (selectionRect){
+        const selected = lines.filter((line) =>
+          isShapeInsideRect(line, normalizedRect)
+        ).map(line => line.id);
 
-      const selected = lines.filter((line) =>
-        isShapeInsideRect(line, normalizedRect)
-      ).map(line => line.id);
+        setSelectedIds(selected);
+      }
 
-      setSelectedIds(selected);
       setSelectionRect(null);
     }
 
@@ -265,12 +319,44 @@ export const useEditor = () => {
 
     }
     else if (tool == "select"){
-      setSelectionRect({
-        x: selectionRect.x,
-        y: selectionRect.y,
-        width: relativePoint.x - selectionRect.x,
-        height: relativePoint.y - selectionRect.y,
-      });
+      if (moveStart.current) {
+        const stage = stageRef.current.getStage();
+        if (!stage) return;
+
+        const point = stage.getPointerPosition();
+        if (!point) return;
+
+        const dx = relativePoint.x - moveStart.current.x;
+        const dy = relativePoint.y - moveStart.current.y;
+
+        setLines(prev =>
+          prev.map(line => {
+            if (!selectedIds.includes(line.id)) return line;
+
+            return {
+              ...line,
+              points: line.points.map((p, i) =>
+                i % 2 === 0 ? p + dx : p + dy
+              ),
+            };
+          })
+        );
+
+        moveStart.current = relativePoint;
+      } else {
+        setSelectionRect(prev => {
+          if (!prev) return prev;
+
+          const rect = {
+            x: prev.x,
+            y: prev.y,
+            width: relativePoint.x - prev.x,
+            height: relativePoint.y - prev.y,
+          };
+
+          return rect;
+        });
+      }
     }
     else if (tool == "brush"){
       const relativePoint = transform.point(point);
@@ -358,12 +444,12 @@ export const useEditor = () => {
   return {
     stageRef,
     lines,
-    selectedIds,
-    isDragging, isDrawing, selectionRect, normalizedRect,
-    tool, changeTool,
+    isDragging, isDrawing, 
+    selectionRect, selectedBounds, selectedIds, normalizedRect,
+    tool, 
+    changeTool,
     handleMouseDown, handleMouseUp, handleMouseMove,
     handleWheel,
     redo, undo,
-    normalizeRect
   }
 }

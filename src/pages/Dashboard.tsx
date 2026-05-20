@@ -1,6 +1,5 @@
-import { useRef, useState, useEffect } from "react";
-import { Stage, Layer, Line, Rect, Transformer } from "react-konva";
-import type Konva from "konva";
+
+import { Stage, Layer, Line, Rect } from "react-konva";
 
 import {
   PencilIcon,
@@ -19,150 +18,24 @@ import {
   Button
 } from "@/components/ui/button"
 
-type Tool = "brush" | "hand" | "eraser" | "select";
 
-type LineType = {
-  id: string;
-  points: number[];
-  stroke: string;
-  strokeWidth: number;
-  isEraser?: boolean;
-};
+import { useEditor } from "@/composables/editor"
+
 
 export default function Dashboard() {
-  const stageRef = useRef<Konva.Stage>(null);
-  const transformerRef = useRef<Konva.Transformer>(null);
-
-  const [tool, setTool] = useState<Tool>("brush");
-
-  const [lines, setLines] = useState<LineType[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const [history, setHistory] = useState<LineType[][]>([]);
-  const [redoStack, setRedoStack] = useState<LineType[][]>([]);
-
-  const addHistory = (newLines: LineType[]) => {
-    setHistory((h) => [...h, lines]);
-    setRedoStack([]);
-    setLines(newLines);
-  };
-
-  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (tool === "hand") return;
-
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const point = stage.getPointerPosition();
-    if (!point) return;
-
-    const id = String(Date.now());
-
-    if (tool === "brush" || tool === "eraser") {
-      const newLine: LineType = {
-        id,
-        points: [point.x, point.y],
-        stroke: "white",
-        strokeWidth: tool === "eraser" ? 20 : 4,
-        isEraser: tool === "eraser",
-      };
-
-      setLines((prev) => [...prev, newLine]);
-      setIsDrawing(true);
-    }
-  };
-
-  const handleMouseMove = () => {
-    if (!isDrawing) return;
-    if (tool !== "brush" && tool !== "eraser") return;
-
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const point = stage.getPointerPosition();
-    if (!point) return;
-
-    setLines((prev) => {
-      const last = prev[prev.length - 1];
-      if (!last) return prev;
-
-      const updated = {
-        ...last,
-        points: [...last.points, point.x, point.y],
-      };
-
-      return [...prev.slice(0, -1), updated];
-    });
-  };
-
-  const handleMouseUp = () => {
-    setIsDrawing(false);
-  };
-
-  const handleUndo = () => {
-    setHistory((h) => {
-      if (h.length === 0) return h;
-
-      const prev = h[h.length - 1];
-      setRedoStack((r) => [...r, lines]);
-      setLines(prev);
-
-      return h.slice(0, -1);
-    });
-  };
-
-  const handleRedo = () => {
-    setRedoStack((r) => {
-      if (r.length === 0) return r;
-
-      const next = r[r.length - 1];
-      setHistory((h) => [...h, lines]);
-      setLines(next);
-
-      return r.slice(0, -1);
-    });
-  };
-
-  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
-    if (!e.evt.ctrlKey) return;
-
-    e.evt.preventDefault();
-
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const scaleBy = 1.05;
-    const oldScale = stage.scaleX();
-
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
-
-    const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-
-    stage.scale({ x: newScale, y: newScale });
-
-    const newPos = {
-      x: pointer.x - mousePointTo.x * newScale,
-      y: pointer.y - mousePointTo.y * newScale,
-    };
-
-    stage.position(newPos);
-    stage.batchDraw();
-  };
-
+  const { 
+    stageRef,
+    tool, isDragging, lines,
+    normalizedRect, isDrawing, selectedIds,
+    changeTool, handleMouseDown, 
+    handleWheel
+  } = useEditor();
+  
   return (
     <div className="w-screen h-screen overflow-hidden">
       <div className="absolute left-2 top-5 z-10 p-2">
         <div className="flex">
-          <p className="inline-block text-3xl font-bold leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">
+          <p className="inline-block text-3xl font-bold leading-[0.9] m-0 bg-secondary/40 backdrop-blur-xs bg-clip-text">
             Note name
           </p>
 
@@ -171,19 +44,19 @@ export default function Dashboard() {
         </div>
 
         <div className="flex gap-2">
-          <p className="text-l font-bold text-muted-foreground">#ebalo</p>
-          <p className="text-l font-bold text-muted-foreground">#hui</p>
-          <p className="text-l font-bold text-muted-foreground">#вся-хуйня</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#ebalo</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#hui</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#вся-хуйня</p>
         </div>
 
       </div>
 
       <div className="absolute top-1/2 -translate-y-1/2 right-5 z-10 flex flex-col gap-1 p-2 bg-primary-foreground/60 dropborder rounded-xl shadow-lg">
-        <Button size="icon-lg" variant="outline" onClick={() => {setTool('hand')}} className={`${tool == 'hand' ? '!bg-secondary-foreground/20' : 1}`}>
+        <Button size="icon-lg" variant="outline" onClick={() => {changeTool('hand')}} className={`${tool == 'hand' ? '!bg-secondary-foreground/20' : 1}`}>
           <HandIcon />
         </Button>
 
-        <Button size="icon-lg" variant="outline">
+        <Button size="icon-lg" variant="outline" onClick={() => {changeTool('select')}} className={`${tool == 'select' ? '!bg-secondary-foreground/20' : 1}`}>
           <MousePointerIcon />
         </Button>
 
@@ -211,11 +84,11 @@ export default function Dashboard() {
           <TypeIcon />
         </Button>
 
-        <Button size="icon-lg" variant="outline" onClick={() => {setTool('brush')}} className={`${tool == 'brush' ? '!bg-secondary-foreground/20' : 1}`}>
+        <Button size="icon-lg" variant="outline" onClick={() => {changeTool('brush')}} className={`${tool == 'brush' ? '!bg-secondary-foreground/20' : 1}`}>
           <PencilIcon />
         </Button>
 
-        <Button size="icon-lg" variant="outline" onClick={() => {setTool('eraser')}} className={`${tool == 'eraser' ? '!bg-secondary-foreground/20' : 1}`}>
+        <Button size="icon-lg" variant="outline" onClick={() => {changeTool('eraser')}} className={`${tool == 'eraser' ? '!bg-secondary-foreground/20' : 1}`}>
           <TrashIcon />
         </Button>
 
@@ -225,46 +98,41 @@ export default function Dashboard() {
         ref={stageRef}
         width={5000}
         height={5000}
-        draggable={tool === "hand"}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        draggable={isDragging}
         onWheel={handleWheel}
-        onMouseLeave={handleMouseDown}
-        onPointerLeave={handleMouseDown}
+        onMouseDown={handleMouseDown}
+
+        style={{
+          cursor: isDragging ? 'grabbing' : 'default' 
+        }}
       >
         <Layer>
-          {lines.map((line) => (
+          {lines.map(line => (
             <Line
               key={line.id}
               points={line.points}
-              stroke={line.stroke}
-              strokeWidth={line.strokeWidth}
+              strokeWidth={5}
+              tension={0.5}
+
+              stroke={selectedIds.includes(line.id) ? "orange" : "lightblue"}
+
+              draggable
               lineCap="round"
               lineJoin="round"
-              globalCompositeOperation={
-                line.isEraser ? "destination-out" : "source-over"
-              }
-              onClick={() => {
-                if (tool !== "select") return;
-                setSelectedId(line.id);
-              }}
             />
           ))}
 
-          {selectedId && (
+          {tool == "select" && isDrawing && normalizedRect && (
             <Rect
-              x={50}
-              y={50}
-              width={100}
-              height={100}
+              x={normalizedRect.x}
+              y={normalizedRect.y}
+              width={normalizedRect.width}
+              height={normalizedRect.height}
+              fill="rgba(0, 100, 255, 0.15)"
               stroke="blue"
-              strokeWidth={2}
-              draggable
+              dash={[4, 4]}
             />
           )}
-
-          <Transformer ref={transformerRef} />
         </Layer>
       </Stage>
     </div>

@@ -1,4 +1,5 @@
 
+import { useEffect, useState } from "react"
 import { Stage, Layer, Line, Rect } from "react-konva";
 
 import {
@@ -11,7 +12,8 @@ import {
   MoveRightIcon,
   MinusIcon,
   TypeIcon,
-  TrashIcon
+  TrashIcon,
+  Scale
 } from "lucide-react"
 
 import {
@@ -20,23 +22,23 @@ import {
 
 
 import { useEditor } from "@/composables/editor"
-
+import { getComputedRgba } from "@/utils"
 
 export default function Dashboard() {
   const { 
     stageRef,
     tool, isDragging, lines,
-    selectionRect, isDrawing, selectedBounds,
-    normalizedRect,
+    isDrawing, selectedBounds,
+    normalizedRect, scale,
     changeTool, handleMouseDown, 
     handleWheel
   } = useEditor();
-  
+
   return (
     <div className="w-screen h-screen overflow-hidden">
       <div className="absolute left-2 top-5 z-10 p-2">
         <div className="flex">
-          <p className="inline-block text-3xl font-bold leading-[0.9] m-0 bg-secondary/40 backdrop-blur-xs bg-clip-text">
+          <p className="inline-block text-3xl font-bold leading-[0.9] m-0 bg-secondary/60 backdrop-blur-xs bg-clip-text">
             Note name
           </p>
 
@@ -45,9 +47,9 @@ export default function Dashboard() {
         </div>
 
         <div className="flex gap-2">
-          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#ebalo</p>
-          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#hui</p>
-          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/40 backdrop-blur-xs bg-clip-text">#вся-хуйня</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/60 backdrop-blur-xs bg-clip-text">#ebalo</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/60 backdrop-blur-xs bg-clip-text">#hui</p>
+          <p className="text-l font-bold text-muted-foreground leading-[0.9] m-0 bg-primary/60 backdrop-blur-xs bg-clip-text">#вся-хуйня</p>
         </div>
 
       </div>
@@ -110,13 +112,12 @@ export default function Dashboard() {
         <Layer>
           {selectedBounds && (
             <Rect
-              x={selectedBounds.x}
-              y={selectedBounds.y}
-              width={selectedBounds.width}
-              height={selectedBounds.height}
-              stroke="blue"
-              dash={[6, 4]}
-              strokeWidth={1}
+              x={selectedBounds.x - (20 / scale)}
+              y={selectedBounds.y - (20 / scale)}
+              width={selectedBounds.width + (40 / scale)}
+              height={selectedBounds.height + (40 / scale)}
+              stroke={getComputedRgba("--primary")}
+              dash={[4 / scale, 4 / scale]}
               listening={false}
             />
           )}
@@ -129,8 +130,6 @@ export default function Dashboard() {
               tension={0.5}
 
               stroke="red"
-
-              draggable
               lineCap="round"
               lineJoin="round"
             />
@@ -142,9 +141,9 @@ export default function Dashboard() {
               y={normalizedRect.y}
               width={normalizedRect.width}
               height={normalizedRect.height}
-              fill="rgba(0, 100, 255, 0.15)"
-              stroke="blue"
-              dash={[4, 4]}
+              fill={getComputedRgba("--primary", 0.15)}
+              stroke={getComputedRgba("--primary")}
+              dash={[4 / scale, 4 / scale]}
             />
           )}
         </Layer>

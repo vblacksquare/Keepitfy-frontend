@@ -4,7 +4,7 @@ import type Konva from "konva";
 
 
 type Tool = "hand" | "brush" | "eraser" | "select";
-type ActionType = "paint"
+type ActionType = "paint" | "move"
 
 
 interface Geometry {
@@ -94,7 +94,7 @@ function isShapeInsideRect(shape: any, rect: any) {
 
   const ratio = intersectionArea / shapeArea;
 
-  return ratio > 0.2;
+  return ratio > 0.05;
 }
 
 function isPointInsideRect(point: any, rect: any) {
@@ -125,10 +125,10 @@ function getSelectedBounds(lines: LineData[], selectedIds: number[]) {
   }
 
   return {
-    x: minX - 20,
-    y: minY - 20,
-    width: maxX - minX + 40,
-    height: maxY - minY + 40,
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
   };
 }
 
@@ -141,6 +141,7 @@ export const useEditor = () => {
   const history = useRef<Action[]>([]);
   const historyPlace = useRef<number>(0);
 
+  const moveStartData = useRef<any>(null);
   const moveStart = useRef<any>(null);
   const isDrawing = useRef<boolean>(false);
 
@@ -149,6 +150,8 @@ export const useEditor = () => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectionRect, setSelectionRect] = useState<Geometry | null>(null);
   const normalizedRect = selectionRect ? normalizeRect(selectionRect) : null;
+
+  const [scale, setScale] = useState<number>(1.0)
 
   const selectedBounds = useMemo(() => {
     return getSelectedBounds(lines, selectedIds);
@@ -187,6 +190,16 @@ export const useEditor = () => {
         })
 
         break
+
+      case "move":
+        setLines(prev => prev
+          .filter(line => action.data.ids.includes(line.id))
+          .map(line => {
+            return action.data.prev[line.id]
+          })
+        )  
+
+        break
     }
   }
 
@@ -202,6 +215,16 @@ export const useEditor = () => {
         setLines(prev => {
           return [...prev, action.data]
         })
+
+        break
+
+      case "move":
+        setLines(prev => prev
+          .filter(line => action.data.ids.includes(line.id))
+          .map(line => {
+            return action.data.new[line.id]
+          })
+        )  
 
         break
     }
@@ -235,6 +258,12 @@ export const useEditor = () => {
 
         if (selectedBounds && isPointInsideRect(relativePoint, selectedBounds)){
           moveStart.current = relativePoint;
+          moveStartData.current = lines
+            .filter(line => selectedIds.includes(line.id))
+            .reduce((acc: any, line) => {
+              acc[line.id] = line;
+              return acc;
+            }, {});
           return
         }
 
@@ -286,7 +315,24 @@ export const useEditor = () => {
     }
     else if (tool == "select"){
       if (moveStart.current){
+        const selected = lines
+          .filter((line) => selectedIds.includes(line.id))
+          .reduce((acc: any, line) => {
+            acc[line.id] = line;
+            return acc;
+          }, {});
+
+        applyAction({
+          type: "move",
+          data: {
+            ids: selectedIds,
+            prev: moveStartData.current,
+            new: selected
+          }
+        })
+
         moveStart.current = null;
+
       } else if (selectionRect){
         const selected = lines.filter((line) =>
           isShapeInsideRect(line, normalizedRect)
@@ -333,12 +379,18 @@ export const useEditor = () => {
           prev.map(line => {
             if (!selectedIds.includes(line.id)) return line;
 
-            return {
+            const movedPoints = {
               ...line,
               points: line.points.map((p, i) =>
                 i % 2 === 0 ? p + dx : p + dy
               ),
             };
+            const movedBox = {
+              ...movedPoints,
+              ...getLineBounds(movedPoints.points)
+            };
+
+            return movedBox;
           })
         );
 
@@ -423,6 +475,12 @@ export const useEditor = () => {
 
       const factor = 1 - e.evt.deltaY * 0.008;
       const newScale = oldScale * factor;
+
+      if (newScale < 0.5 || newScale > 2){
+        return
+      }
+
+      setScale(newScale)
       const boundedScale = Math.max(0.1, Math.min(10, newScale));
 
       stage.scale({ x: boundedScale, y: boundedScale });
@@ -444,9 +502,10 @@ export const useEditor = () => {
   return {
     stageRef,
     lines,
-    isDragging, isDrawing, 
+    isDragging, isDrawing,
     selectionRect, selectedBounds, selectedIds, normalizedRect,
-    tool, 
+    tool,
+    scale,
     changeTool,
     handleMouseDown, handleMouseUp, handleMouseMove,
     handleWheel,

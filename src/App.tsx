@@ -1,10 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuth } from "@/providers/AuthProvider";
+import { NotesProvider } from "@/providers/NotesProvider";
 
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup"
 import Dashboard from "@/pages/Dashboard";
+import GraphPage from "@/pages/GraphPage";
 import Loading from "@/pages/Loading";
 import Verify from "@/pages/Verify";
 import Recovery from "@/pages/Recovery";
@@ -86,13 +88,17 @@ export default function App() {
         />
 
         <Route
-          path="/"
           element={
             <PrivateRoute>
-              <Dashboard />
+              <NotesProvider>
+                <Outlet />
+              </NotesProvider>
             </PrivateRoute>
           }
-        />
+        >
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/graph" element={<GraphPage />} />
+        </Route>
 
       </Routes>
     </BrowserRouter>

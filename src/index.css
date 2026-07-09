@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource/caveat";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -123,8 +124,12 @@
     }
   body {
     @apply bg-background text-foreground;
+    /* Stop trackpad two-finger swipes inside canvases (graph/editor) from
+       chaining out to the document and rubber-banding the whole page. */
+    overscroll-behavior: none;
     }
   html {
     @apply font-sans;
+    overscroll-behavior: none;
     }
 }
